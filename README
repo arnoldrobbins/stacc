@@ -1,0 +1,15 @@
+README --- 2/85
+
+The files in this directory contain the source for a bootstrap and
+regular version of the 'stacc' recursive descent parser generator.
+
+The files are as follows:
+
+README		--- this file
+hsearch.c	--- homegrown version of System V hsearch(3c) routine
+makefile	--- build an initial 'stacc'
+st.parse.c	--- bootstrap recursive descent parser in C
+st.parse.h	--- header file
+stacc.1		--- man page
+stacc.c		--- main program, includes st.parse.h and st.parse.c
+stacc.stacc	--- stacc grammar for processing by stacc itself

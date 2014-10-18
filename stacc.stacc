@@ -1,0 +1,199 @@
+# Parser for 'stacc'
+
+.state state;
+.scanner getsym;
+.symbol symbol;
+
+
+
+.terminal
+         TERMIDSYM
+         NONTERMIDSYM
+         INTSYM
+         ISSYM
+         EPSILONSYM
+         ;
+
+.ext_term
+         EOF
+         ;
+
+
+
+rdp ->
+   {     declaration
+      |  production           ? if (symbol != EOF)
+                              ?    errmsg ("production expected", & state);
+                              ? while (symbol != EOF && symbol != ';')
+                              ?    getsym();     /* skip middle of prod */
+                              ? if (symbol == ';')
+                              ?    getsym();     /* advance to next prod */
+      }
+   EOF.                       ? errmsg ("EOF expected", & state);
+   ;
+
+
+
+declaration ->
+   '.'
+   ($    TERMIDSYM.           ! decl_tail (& state);
+      |  NONTERMIDSYM.        ! decl_tail (& state);
+      |  EPSILONSYM.          ! decl_tail (& state);
+      )
+                              ? errmsg ("missing declarator", & state);
+   ';'                        ? errmsg ("missing semicolon", & state);
+   ;
+
+
+
+termlist ->
+                              ! int i;
+   {$    NONTERMIDSYM         ! o_defn (symboltext, next_term_val);
+                              ! last_term_val = next_term_val;
+                              ! next_term_val++;
+			      ! terminal.key = malloc ((unsigned) strlen (symboltext)+1);
+			      ! strcpy (terminal.key, symboltext);
+			      ! terminal.data = (char *) NONTERMIDSYM;
+                              ! hsearch (terminal, ENTER);
+      |  INTSYM               ! next_term_val = atoi (symboltext);
+                              ! last_term_val = next_term_val;
+      |  '='                  ! next_term_val = last_term_val;
+      }
+   ;
+
+
+
+extlist ->
+   {  NONTERMIDSYM            ! terminal.key = malloc ((unsigned) strlen (symboltext) + 1);
+			      ! strcpy (terminal.key, symboltext);
+			      ! terminal.data = (char *) NONTERMIDSYM;
+			      ! hsearch (terminal, ENTER);
+      }
+   ;
+
+
+
+production ->
+                              ! char name [MAXLINE];
+   NONTERMIDSYM               ! strcpy (name, symboltext);
+   ISSYM                      ? errmsg ("missing '->'", & state);
+   actions                    ! o_begin_routine (name);
+   rhs                        ? errmsg ("missing right-hand-side", & state);
+   ';'                        ? errmsg ("missing semicolon", & state);
+   actions                    ! o_accept_actions();
+   ;                          ! if (state == ACCEPT)
+                              !    o_end_routine();
+
+
+
+rhs ->
+                              ! int numalts;
+                              ! numalts = 0;
+  # 'action' following may cause problems:
+   actions                    ! o_accept_actions();
+   (     '$'                  ! o_selection_start();
+         actions              ! if (num_actions > 0 || num_erractions > 0)
+                              !    fprintf (stderr,
+                              !     "%d:  actions are illegal here\n",
+                              !     linenumber);
+         choice               ? errmsg ("missing choice", & state);
+         {  '|'
+            choice            ? errmsg ("missing choice", & state);
+            }
+         epsilon              ! o_selection_end();
+      |  alternative
+         {  '|'               ! o_alt();
+                              ! numalts++;
+            alternative       ? errmsg ("missing alternative", & state);
+            }
+                              ! for (; numalts > 0; numalts--)
+                              !    o_endalt();
+                              ? for (; numalts > 0; numalts--)
+                              ?    o_endalt();
+      )
+   ;
+
+
+
+choice ->
+                              ! int more_than_one;
+   TERMIDSYM                  ! o_choice_start (symboltext);
+   [  '.'                     ! advance = NO;
+                              ? advance = YES;
+      ]
+   actions                    ! o_choice_actions();
+   [  eltpresent              ! o_begin_seq();
+                              ! more_than_one = TRUE;
+                              ? more_than_one = FALSE;
+      ]
+   {     term                 ! o_test_seq_failure();
+      |  nonterm              ! o_test_seq_failure();
+      }
+   ;                          ! if (more_than_one)
+                              !    o_end_seq();
+                              ! o_choice_end();
+
+
+
+alternative ->
+                              ! int more_than_one;
+   (     term
+      |  nonterm              ? errmsg ("illegal term/nonterm", & state);
+      )
+   [  eltpresent              ! o_begin_seq();
+                              ! more_than_one = TRUE;
+                              ? more_than_one = FALSE;
+      ]
+   {     term                 ! o_test_seq_failure();
+      |  nonterm              ! o_test_seq_failure();
+      }
+   ;                          ! if (more_than_one)
+                              !    o_end_seq();
+
+
+
+eltpresent ->
+   $  NONTERMIDSYM.
+   |  TERMIDSYM.
+   |  EPSILONSYM.
+   |  '('.
+   |  '['.
+   |  '{'.
+   ;
+
+
+
+term ->
+                              ! char termbuf [MAXLINE];
+      TERMIDSYM               ! strcpy (termbuf, symboltext);
+      [  ':'                  ? o_match (termbuf);
+         TERMIDSYM            ? errmsg ("missing upper bound", & state);
+                              ! o_match_range (termbuf, symboltext);
+         ]
+      [  '.'                  ! advance = NO;
+                              ? advance = YES;
+         ]
+      actions                 ! o_end_term();
+   |
+      EPSILONSYM              ! o_epsilon();
+      actions                 ! o_accept_actions();
+   ;
+
+
+
+nonterm ->
+      NONTERMIDSYM            ! o_call_nonterm (symboltext);
+      actions                 ! o_end_nonterm();
+   |  '('
+      rhs                     ? errmsg ("missing rhs in parentheses", & state);
+      ')'                     ? errmsg ("missing right parenthesis", & state);
+      actions                 ! o_end_par();
+   |  '['
+      rhs                     ? errmsg ("missing optional rhs", & state);
+      ']'                     ? errmsg ("missing right bracket", & state);
+      actions                 ! o_end_opt();
+   |  '{'                     ! o_begin_rept();
+      rhs                     ? errmsg ("missing repeated rhs", & state);
+      '}'                     ? errmsg ("missing right brace", & state);
+      actions                 ! o_end_rept();
+   ;

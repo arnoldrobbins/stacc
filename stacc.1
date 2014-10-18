@@ -1,0 +1,879 @@
+.ie t \{ .de CW
+.vs 10.5p
+.ta 16m/3u 32m/3u 48m/3u 64m/3u 80m/3u 96m/3u
+.nf
+.ft CW
+.cs CW 18
+.. \}
+.el \{ .de CW
+.nf
+.. \}
+.ie t \{ .de CN
+.ta 0.5i 1i 1.5i 2i 2.5i 3i 3.5i 4i 4.5i 5i 5.5i 6i
+.vs
+.fi
+.cs CW
+.ft
+.. \}
+.el \{ .de CN
+.fi
+.. \}
+.if n .ds lq ""
+.if n .ds rq ""
+.if t .ds lq ``
+.if t .ds rq ''
+.de QU
+\\*(lq\\$1\\*(rq\\$2
+..
+.TH STACC 1 GT-SWT
+.SH NAME
+stacc \- recursive descent parser generator
+.SH SYNOPSIS
+.B stacc\^
+[\^ C\^ | Ratfor\^ | Pascal\^ | Pl/1\^ | Plp\^ ]
+.SH DESCRIPTION
+.I Stacc\^
+(STill Another Compiler-Compiler) is a simple parser generator
+designed to reduce the effort involved in building recursive-descent
+parsers.
+Its development was motivated by two things:
+(1) the large number of ad-hoc recursive descent parsers constantly
+being written and re-written at the Georgia Tech installation;
+(2) the desire to quickly generate an SSPL compiler in SSPL for
+microprocessor software development work.
+Its design was inspired both by
+.IR yacc (1)
+(Yet Another Compiler-Compiler) on
+.SM UNIX
+and the GTL Syntax Parser on the long defunct Georgia Tech
+Burroughs B5500.
+.SS Basic Theory
+.PP
+Given an LL(1) grammar written in an extended BNF,
+.I stacc\^
+generates a very simple top-down, recursive-descent parser.
+Many excellent references are available on the subject of such parsers;
+the following will serve as starting points:
+.TP
+Gries, David,
+.I "Compiler Construction for Digital Computers,"
+John Wiley & Sons, Inc., New York, 1971.
+.br
+(See chapters 3, 4, 12, and 15)
+.TP
+Aho, Alfred V., and Jeffrey D. Ullman,
+.I "The Theory of Parsing, Translation, and Compiling,"
+Prentice-Hall, Inc., Englewood Cliffs, NJ, 1972.
+.br
+(See chapters 1, 3, and 5)
+.TP
+Georgia Institute of Technology,
+School of Information and Computer Science,
+.I "GTL Programmer's Reference Manual for the Burroughs B5500,"
+1974.
+.br
+(See chapter 8)
+.SS Principles of Operation
+.PP
+.I Stacc\^
+generates a
+.QU "parser,"
+a program which converts a stream of
+.QU "tokens"
+into a representation of a derivation tree which describes
+the production of the input stream from a given grammar.
+In practice, the derivation tree exists solely in the call structure
+of the subprograms called to parse the input, so the user must supply
+.QU "action"
+routines to produce the output he desires.
+.PP
+A parser written with 
+.I stacc\^
+also requires a
+.QU "lexical analyzer,"
+a routine that converts the input stream of ASCII characters into the
+tokens handled by the parser.
+.PP
+The operation of a
+.I stacc\^
+parser is roughly as follows.
+In the initialization phase, the lexical analyzer is called to pick up
+the first token from the stream of input characters.
+An integer assigned to the class of token found is then placed in a
+.QU "current symbol"
+variable by the lexical analyzer.
+The parser is then called.
+The parser attempts to
+.QU "match"
+the current symbol against all
+possibilities for the first input symbol;
+if a match is found, any actions supplied by the user are performed
+and the lexical analyzer is called to fetch the next input token.
+This procedure is repeated until either the entire input stream
+is recognized as a valid sentence in the input language or an
+error (a missing or illegal
+.QU "current symbol" )
+is detected.
+In the event of an error, the user must supply recovery actions
+so that the parse can proceed.
+.PP
+The function of
+.I stacc\^
+is to convert an extended BNF grammar
+into code that checks the current input symbol, calls the lexical
+analyzer when appropriate, and performs actions specified by the
+user after certain constructs in the input stream are recognized,
+thus freeing the user from the bookkeeping details needed to
+build a parser.
+.SS Usage Information
+.PP
+.I Stacc\^
+takes input (described in detail below) on its standard
+input and produces output
+in two files in the current directory.
+The first file is the code that implements the parser.
+This code is expressed in the language whose name is given as the
+first argument on the command line that invoked
+.IR stacc .
+The file will be named
+.BI st.parse. lang,
+where
+.I lang
+is the conventional filename extension for the language named on the
+.I stacc\^
+command line.
+By default,
+.I stacc\^
+produces a parser in C, so the file will be named
+.BR st.parse.c .
+The second file is a set of macro definitions that establishes
+mnemonics for the integer
+.QU "current symbol"
+values supplied by the lexical analyzer.
+It is
+.I always
+named
+.BR st.parse.h .
+.PP
+Conventionally,
+.I stacc\^
+input files have the extension
+.QU ".stacc,"
+e.g.
+.QU "hp.stacc,"
+.QU "sspl.stacc,"
+.QU "stacc.stacc."
+The generated files may then be
+.QU "included"
+in a source file during compilation.
+(Note that for
+.IR make (1)
+to understand about
+.I stacc\^
+programs, the rules similar to the following are necessary:
+.sp
+.RS
+.CW
+	STACC=stacc
+
+	\&.stacc.c:
+		$(STACC) < $<
+		mv st.parse.c $*.c
+
+	\&.stacc.o:
+		$(STACC) < $<
+		mv st.parse.c $*.c
+		$(CC) $(CFLAGS) \-c $*.c
+.CN
+.RE
+.sp
+which are similar to the already built-in rules for
+.IR yacc ).
+.SS Input Specifications
+.PP
+Input to
+.I stacc\^
+consists of a series of
+.QU "declarations"
+and
+.QU "productions,"
+separated by semicolons.
+There may be any number of either, and they may be mixed in any order.
+Input is free-form; whitespace may be inserted where desired to improve
+readability.
+Ratfor-style comments (beginning with a sharp (#), ending with a
+newline) may be used for documentation.
+.PP
+Declarations consist of a period (.) followed by a keyword and an
+argument list whose format depends on the keyword.
+There are seven types of declarations.
+.PP
+Four declarations are used to select the names of critical
+objects used by the parser:
+.TP
+\&.state <variable>
+declares the parser state variable (named
+.QU "state"
+by default),
+.TP
+\&.scanner <routine>
+declares the name of
+the lexical analyzer subprogram (\*(lqgetsym\*(rq by default),
+.TP
+\&.symbol <variable>
+declares the
+.QU "current symbol"
+variable (named
+.QU "symbol"
+by default), and
+.TP
+\&.epsilon <symbol>
+declares the symbol to be used to match
+the null token (empty string of input symbols).
+.PP
+One declaration is used only by parsers written in Ratfor:
+.TP
+\&.common '<filename>'
+specifies the name of an include file
+containing the declarations of the current symbol variable
+and any other variables used for communication between the parser
+and the lexical analyzer.
+.PP
+The final two types of declarations are used to list mnemonics for
+terminal symbols recognized by the lexical analyzer.
+The first consists of
+.QU ".ext_term"
+followed by a list of identifiers
+used by the lexical analyzer to identify terminal symbols.
+This declaration merely informs
+.I stacc\^
+that the given names
+represent terminal symbols; no macro definitions are generated.
+The second type consists of
+.QU ".terminal"
+followed by a list of mnemonics.
+Each mnemonic is assigned an integer value, and output in a macro
+definition to make that value available to the lexical analyzer.
+A specific value may be assigned to a terminal symbol by preceding
+it with an integer; two terminal symbols may be equated by placing
+an equals sign (=) between them.
+Otherwise, increasing values (starting from zero) are assigned.
+For example, the following declaration
+.sp
+.RS
+.CW
+\&.terminal
+         ALTSYM
+         DECLSYM = NOADVANCESYM
+         100 LETTER_D
+         LETTER_E
+         ;
+.CN
+.RE
+.sp
+produces the following C macro definitions:
+.sp
+.RS
+.CW
+#define ALTSYM		0
+#define DECLSYM		1
+#define NOADVANCESYM	1
+#define LETTER_D	100
+#define LETTER_E	101
+.CN
+.RE
+.sp
+Productions are written in a language similar to the extended
+BNF used throughout the Georgia Tech Software Tools Subsystem,
+and similar to the specifications given to
+.IR yacc .
+A production consists of a nonterminal symbol, followed by the
+.QU "rewrites as"
+symbol
+.RB ( \-> ),
+followed by a right-hand-side with imbedded semantic actions.
+.PP
+The right-hand-side allows the usual BNF operators: vertical bar
+.RB ( | )
+to indicate a choice, parentheses to nest right-hand-sides, square brackets
+.RB ( [\|] )
+to enclose optional constructs, and curly braces
+.RB ( {} )
+to enclose repeated constructs.
+.PP
+Items in the right-hand-side are nonterminal symbols
+(those that appear in the left-hand-side of some production),
+terminal symbols (those declared by the
+.QU ".terminal"
+and
+.QU ".ext_term"
+declarations),
+quoted single characters, or two terminal symbols or quoted
+characters separated by a colon
+.RB ( : )
+(which matches any terminal symbol or character within the given limits).
+In addition, a right-hand-side may be preceded by a dollar sign
+.RB ( $ ),
+indicating that it represents a particularly common form
+of production:  a number of alternatives, each of which is
+distinguished by a single leading terminal symbol.
+(This happens, for example, in parsing statements in most
+algorithmic languages; each different type of statement is
+preceded by a unique key word.)
+Recognition of this common case allows much faster special-purpose
+code to be generated.
+.PP
+After any terminal, nonterminal, or special construct in the
+right-hand-side there may appear semantic actions.
+Actions to be performed after a symbol is successfully matched
+are preceded by an exclamation point
+.RB ( ! );
+actions to be performed
+after a symbol fails to be matched are preceded by a question mark
+.RB ( ? ).
+Actions extend from their initial character to the end of the
+line on which they appear.
+Actions appearing after terminal symbols are executed
+.I after
+a symbol is matched and
+.I before
+the lexical analyzer is called; thus, they may perform
+some operation based on characteristics of the symbol matched.
+If the terminal symbol or range of terminal symbols being matched
+is followed by a period
+.RB ( . ),
+the automatic call of the lexical analyzer is disabled,
+allowing the user to substitute his own scanning actions.
+.PP
+Actions may appear immediately after the
+.QU "rewrites as"
+symbol
+.RB ( \-> ),
+in which case they are executed before any code generated by
+.IR stacc ,
+or immediately after the production-terminating semicolon
+.RB ( ; ),
+in which case they are executed unconditionally before control
+leaves the production.
+.PP
+A sample production:
+.sp
+.RS
+.CW
+parser ->
+   {
+      (     declaration
+         |  production
+         )
+      ';'      ? error ("missing semicolon");
+               ! numprods++;
+      }
+   EOF.        ? error ("EOF expected");
+               ! analyze();
+   ;
+.CN
+.RE
+.SS Using \fIStacc\fP With C
+.PP
+The C programmer should call a routine that has the name
+of the start symbol of the grammer.  The argument to that routine should
+be the address of an integer.  When the parser returns, the pointed-to
+variable will contain the parse state.
+The parser state will either be NOMATCH
+.if n .RB ( #define d
+.if t (\f(CW#define\fPd
+to be 1) if the first symbol
+failed to match any legal alternative, FAILURE (2) if some
+symbols matched but some did not (and no error recovery succeeded),
+or ACCEPT (3) if the input was a legal sentence in the language
+being processed.
+Inside action rules (i.e. inside the generated subroutines),
+the name of the status argument is fixed at
+.QU "gpst" ;
+this variable is reserved for
+.I stacc\^
+and should not be used for any other purpose.
+Be sure to indirect through it, i.e., test
+.QU "*gpst,"
+for NOMATCH, FAILURE, etc., not
+.QU gpst
+itself.
+.SS Using \fIStacc\fP With Ratfor
+.BR Note :
+The Ratfor produced by
+.I stacc\^
+is a version of the language
+developed at Georgia Tech for use on Pr1me computers.
+This language is not compatible with
+.SM UNIX
+Ratfor.
+.I Stacc
+does not currently generate code for
+.SM UNIX
+Ratfor, and probably never will.  As
+.I Yacc
+points out,
+.QU "Ratfor is a dead language."
+.PP
+Ratfor users of
+.I stacc\^
+should note that they must declare a
+common block
+.QU "include"
+file with the
+.QU ".common"
+declaration, so that the lexical analyzer can communicate with the parser.
+.PP
+The form of a
+.I stacc\^
+output routine in Ratfor is a subroutine
+with one integer argument, which exports the parser state upon
+return.
+.PP
+To use a
+.IR stacc -generated
+parser, the Ratfor programmer should
+simply call the subroutine whose name corresponds to the start
+symbol of his grammar, passing one integer variable as an argument.
+That variable will contain the parse state upon completion of the
+parse.
+.PP
+As with C, the status will be NOMATCH, FAILURE, or ACCEPT, and
+the variable that contains the status information is called
+.QU gpst .
+.PP
+If the user specifies a grammar that is recursive,
+.I stacc\^
+will produce recursive output.
+Pr1me Fortran (with special compiler options) and
+.IR f77 (1)
+allow recursive subroutines and functions, but this is
+inherently non-portable.
+.SH EXAMPLES
+.PP
+The following sample
+.I stacc\^
+input will generate a program to
+convert infix arithmetic expressions to reverse-Polish.
+An expression consists of letters, digits, and operators
+arranged in the usual manner.
+Multiplication and division have priority over addition and
+subtraction.
+.sp
+.RS
+.CW
+# stacc input for reverse polish notation calculator
+
+\&.scanner "input";
+\&.symbol "chr";
+
+expression ->
+                  ! int op;
+   term
+   {
+      ($    '+'   ! op = '+';
+         |  '\-'   ! op = '\-';
+         )
+      term        ! putchar (op);
+      }
+   ;
+
+term ->
+                  ! int op;
+   factor
+   {
+      ($    '*'   ! op = '*';
+         |  '/'   ! op = '/';
+         )
+      factor      ! putchar (op);
+      }
+   ;
+
+factor ->
+      'a':'z'     ! putchar (chr);
+   |  '0':'9'     ! putchar (chr);
+   |  '('
+         expression
+         ')'
+   ;
+.CN
+.RE
+.sp
+.I Stacc\^
+produced the following C output:
+.sp
+.RS
+.CW
+/* in the file st.parse.h */
+#define NOMATCH 1
+#define FAILURE 2
+#define ACCEPT 3
+
+
+
+/* in the file st.parse.c */
+
+
+
+expression (gpst)
+int *gpst;
+{
+  extern int chr;
+  int input();
+  int state;
+  int op;
+  term (& state);
+  switch (state) {
+     case FAILURE: {
+        *gpst = FAILURE;
+        return;
+        }
+     }
+  if (state == ACCEPT) {
+     do {
+        state = NOMATCH;
+        switch (chr) {
+           case '+': {
+              state = ACCEPT;
+              op = '+';
+              input ();
+              break;
+              }
+           case '\-': {
+              state = ACCEPT;
+              op = '\-';
+              input ();
+              break;
+              }
+           }
+        if (state == ACCEPT) {
+           term (& state);
+           switch (state) {
+              case FAILURE: {
+                 *gpst = FAILURE;
+                 return;
+                 }
+              case ACCEPT: {
+                 putchar (op);
+                 break;
+                 }
+              }
+           if (state != ACCEPT) {
+              *gpst = FAILURE;
+              return;
+              }
+           }
+        } while (state == ACCEPT);
+     switch (state) {
+        case NOMATCH: {
+           state = ACCEPT;
+           break;
+           }
+        }
+     if (state != ACCEPT) {
+        *gpst = FAILURE;
+        return;
+        }
+     }
+  *gpst = state;
+}
+
+
+
+term (gpst)
+int *gpst;
+{
+  extern int chr;
+  int input();
+  int state;
+  int op;
+  factor (& state);
+  switch (state) {
+     case FAILURE: {
+        *gpst = FAILURE;
+        return;
+        }
+     }
+  if (state == ACCEPT) {
+     do {
+        state = NOMATCH;
+        switch (chr) {
+           case '*': {
+              state = ACCEPT;
+              op = '*';
+              input ();
+              break;
+              }
+           case '/': {
+              state = ACCEPT;
+              op = '/';
+              input ();
+              break;
+              }
+           }
+        if (state == ACCEPT) {
+           factor (& state);
+           switch (state) {
+              case FAILURE: {
+                 *gpst = FAILURE;
+                 return;
+                 }
+              case ACCEPT: {
+                 putchar (op);
+                 break;
+                 }
+              }
+           if (state != ACCEPT) {
+              *gpst = FAILURE;
+              return;
+              }
+           }
+        } while (state == ACCEPT);
+     switch (state) {
+        case NOMATCH: {
+           state = ACCEPT;
+           break;
+           }
+        }
+     if (state != ACCEPT) {
+        *gpst = FAILURE;
+        return;
+        }
+     }
+  *gpst = state;
+}
+
+
+
+factor (gpst)
+int *gpst;
+{
+  extern int chr;
+  int input();
+  int state;
+  state = NOMATCH;
+  if ('a' <= chr && chr <= 'z') {
+     state = ACCEPT;
+     putchar (chr);
+     input ();
+     }
+  if (state == NOMATCH) {
+     if ('0' <= chr && chr <= '9') {
+        state = ACCEPT;
+        putchar (chr);
+        input ();
+        }
+     if (state == NOMATCH) {
+        if (chr == '(') {
+           state = ACCEPT;
+           input ();
+           }
+        if (state == ACCEPT) {
+           expression (& state);
+           switch (state) {
+              case FAILURE: {
+                 *gpst = FAILURE;
+                 return;
+                 }
+              }
+           if (state != ACCEPT) {
+              *gpst = FAILURE;
+              return;
+              }
+           state = NOMATCH;
+           if (chr == ')') {
+              state = ACCEPT;
+              input ();
+              }
+           if (state != ACCEPT) {
+              *gpst = FAILURE;
+              return;
+              }
+           }
+        }
+     }
+  *gpst = state;
+}
+.CN
+.RE
+.sp
+The following main program was
+necessary to finish the implementation:
+.sp
+.RS
+.CW
+#include <stdio.h>
+#include <ctype.h>
+
+/* rpn -\|-\|-\| convert to Reverse Polish */
+
+#include "st.parse.h"
+
+int chr;
+
+main()
+{
+	int state;
+
+	input();
+	expression (& state);
+	putchar ('\en');
+	if (state != ACCEPT || chr != '\en')
+	{
+		fprintf (stderr, "syntax error\en");
+		exit (1);
+	}
+	exit (0);
+}
+
+/* input -\|-\|-\| get next character from standard input */
+
+input ()
+{
+	while ((chr = getchar ()) == '\ ' || chr == '\et')
+		;
+}
+
+#include "st.parse.c"
+.CN
+.RE
+.SH FILES
+.TP
+.BI ./st.parse. lang
+for the generated parser.
+.I Lang
+will be one of
+.BR .c ,
+.BR .p ,
+.BR .r ,
+.BR .pl1 ,
+or
+.BR .plp ,
+for C, Pascal, Ratfor, PL/1, and Plp (Pr1me's system programming language),
+respectively.
+.TP
+.B ./st.parse.h
+for the include file with terminal constant definitions.
+.SH SEE ALSO
+.IR Yacc (1),
+and
+.IR Rp (1)
+in the
+.I
+Software Tools Subsystem Reference Manual.
+.SH DIAGNOSTICS
+(Note that all error messages are preceded by the number of
+the line in the input stream being processed at the time of the
+detection of the error.)
+.TP
+\-> symbol is ill-formed
+\&'\-' was seen, but '>' was missing.
+.TP
+EOF expected
+there is data after the last legal production.
+.TP
+actions are illegal here
+actions are not allowed immediately after '$'.
+.TP
+bad symbol
+input string could not be lexically analyzed.
+.TP
+error actions illegal here
+error actions not allowed after quick-select terminal.
+.TP
+identifier or string expected
+missing declaration parameter.
+.TP
+illegal declarator
+keyword after '.' was not recognizable.
+.TP
+illegal term/nonterm
+expected a terminal or nonterminal; didn't find one.
+.TP
+missing '\->'
+should be a '\->' after the left-hand-side of a production.
+.TP
+missing alternative
+missing or illegal alternative after '|'.
+.TP
+missing choice
+missing or illegal quick-select alternative after '|'.
+.TP
+missing declarator
+missing keyword after '.'.
+.TP
+missing optional rhs
+there should be a right-hand-side within square brackets.
+.TP
+missing quote
+obvious, hopefully.
+.TP
+missing quote or string too long
+strings have a maximum length of about 100 characters.
+.TP
+missing repeated rhs
+there should be a right-hand-side within curly braces.
+.TP
+missing rhs in parentheses
+there should be a right-hand-side within parentheses.
+.TP
+missing right brace
+missing entire right-hand-side of production.
+.TP
+missing right bracket
+missing entire right-hand-side of production.
+.TP
+missing right parenthesis
+missing entire right-hand-side of production.
+.TP
+missing right-hand-side
+missing entire right-hand-side of production.
+.TP
+missing semicolon
+missing second terminal in range of form 'lower:upper'.
+.TP
+missing upper bound
+missing second terminal in range of form 'lower:upper'.
+.TP
+production expected
+input stream contained neither declaration nor production.
+.TP
+too many action/erroraction lines
+there are too many lines of code to store internally.
+.TP
+too many characters pushed back
+internal error \(em see whoever supports
+.I stacc
+at your local installation.
+.TP
+too much action/erraction text
+there is too much code to store internally.
+.TP
+unsupported language
+.I Stacc\^
+doesn't recognize the language name specified.
+.SH BUGS
+.I Stacc
+does not optimize its (GT style) Ratfor output as well as it could;
+some redundant code shows up occasionally.
+.PP
+Error recovery in
+.I stacc
+is still somewhat primitive.
+.PP
+No check is made to see if the input grammar is LL(1).
+.PP
+There is currently no way to pass user code straight on through to
+the generated code (e.g. external declarations).
+.PP
+It should be able to produce standard
+.SM UNIX
+Ratfor, as well as EFL, but probably never will.
+.SH STATUS
+.I Stacc
+was moved to
+.SM UNIX
+more as an exercise in program portability than for production use.
+It will
+.I not
+be supported or enhanced by the I.C.S. lab staff at Georgia Tech.
