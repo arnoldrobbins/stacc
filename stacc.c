@@ -3,6 +3,8 @@
 
 #include <stdio.h>
 #include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define INDENT()	tab_over()
 #define STEP_IN()	indentation++
@@ -53,7 +55,6 @@ typedef enum {
 	} ACTION;
 
 extern ENTRY *hsearch ();
-extern char *malloc ();
 
 char inbuf [INBUFSIZE] = "\0\0\0";	/* a few extra NULs, just in case */
 int ibp = 0;
@@ -103,12 +104,6 @@ char *lang_names[] = {
 };
 
 int Debug = FALSE;
-
-#ifdef lint
-extern char *strcat();
-extern char *strcpy();
-extern char *sprintf();		/* this one isn't right for System V (sigh) */
-#endif
 
 #include "st.parse.h"
 
@@ -863,7 +858,7 @@ char name [];
 	case PL1:
 	case PLP:
 		INDENT();
-		fprintf (stdout, "call %s (%s)\*n", name, statevar);
+		fprintf (stdout, "call %s (%s)\n", name, statevar);
 		svarval = UNKNOWN;
 		break;
 
@@ -1697,11 +1692,11 @@ o_end_par ()
 		else if (num_actions <= 0 && num_erractions > 0)
 		{
 			INDENT();
-			fprintf (stdout, "if (%s = NOMATCH) then do;%n", statevar);
+			fprintf (stdout, "if (%s = NOMATCH) then do;\n", statevar);
 			STEP_IN();
 			o_error_actions();
 			INDENT(); 
-			fprintf (stdout, "end;%n");
+			fprintf (stdout, "end;\n");
 			STEP_OUT();
 		}
 		else if (num_actions <= 0 && num_erractions <= 0)

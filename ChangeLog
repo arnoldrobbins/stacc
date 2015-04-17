@@ -1,0 +1,9 @@
+2015-04-17         Arnold D. Robbins     <arnold@skeeve.com>
+
+	* stacc.c, hsearch.c: Fixed to compile in the 21st century.
+
+2014-10-18         Arnold D. Robbins     <arnold@skeeve.com>
+
+	* README, makefile, stacc.1, stacc.c, stacc.stacc, hsearch.c:
+	Original C versions from 1985, checked into Git.
+	* st.parse.c, st.parse.h: Bootstrap versions, also checked into Git.

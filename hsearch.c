@@ -1,6 +1,7 @@
 /* hsearch.c --- PD simple implementation of System V hsearch(3c) routine */
 
 #include <stdio.h>
+#include <stdlib.h>
 
 typedef struct entry {
 	char *key;
@@ -19,8 +20,6 @@ typedef struct element {
 
 static ELEMENT **Table = NULL;	/* pointer to dynamicly allocated table */
 static int Num_elem = -1;	/* number of elements */
-
-extern char *calloc();
 
 extern void hdestroy();
 extern int hcreate();
