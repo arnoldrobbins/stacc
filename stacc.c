@@ -555,7 +555,7 @@ initialize()
 
 	hcreate (131);	/* hash table of terminal symbols */
 
-	if (strcmp (Argv[1], "-d") == 0)
+	if (Argc > 1 && strcmp (Argv[1], "-d") == 0)
 	{
 		Debug = TRUE;
 		Argv++;

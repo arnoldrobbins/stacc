@@ -1,6 +1,7 @@
 2015-04-17         Arnold D. Robbins     <arnold@skeeve.com>
 
 	* stacc.c, hsearch.c: Fixed to compile in the 21st century.
+	* stacc.c (initialize): Bug fix so won't core dump if no arguments.
 
 2014-10-18         Arnold D. Robbins     <arnold@skeeve.com>
 
